@@ -1,6 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import bgHomepage from "../background-1.jpg";
 
+const MOBILE_BREAKPOINT_MQ = "(max-width: 768px)";
+
+function useIsMobileLayout() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(MOBILE_BREAKPOINT_MQ).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_BREAKPOINT_MQ);
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return isMobile;
+}
+
 // ══════════════════════════════════════════════════════
 //  TKS LOGO (embedded)
 // ══════════════════════════════════════════════════════
@@ -74,6 +90,7 @@ Return ONLY valid JSON (no markdown, no explanation). Use this exact structure:
 }
 
 ARTICLE RULES — read carefully:
+- The "articles" array MUST contain exactly 3 items (a1, a2, a3) — never more, never fewer
 - Articles are blog post topics the student will research and write themselves — NOT news summaries
 - Topics should be foundational, conceptual, and timeless — how things work, why they matter, what they mean
 - Think: "How LLMs understand language", "Why CRISPR is like a find-and-replace for DNA", "What makes a neural network learn"
@@ -141,6 +158,7 @@ Return ONLY valid JSON (no markdown, no explanation). Use this exact structure:
 }
 
 ARTICLE RULES:
+- The "articles" array MUST contain exactly 3 items (a1, a2, a3) — never more, never fewer
 - Blog post topics the student will research and write — NOT news
 - Foundational, conceptual, timeless — how things work in science
 - Think: "How neurons communicate", "Why DNA replication is almost perfect", "What entropy really means"
@@ -231,21 +249,29 @@ IDEA RULES:
   }
 
   if (track === "science") {
+    const fb = buildScienceFallbackContent(topic, hours, interests);
+    const articlesFromApi = (parsed.articles || []).slice(0, 3);
+    const articles = articlesFromApi.length > 0 ? articlesFromApi : fb.articles;
+    const applyTagged = tagRecSection(parsed.apply, recs.apply);
+    const reviewTagged = tagRecSection(parsed.review, recs.review);
+    const ideaTagged = tagRecSection(parsed.idea, recs.idea);
     return {
-      category: "custom", track: "science",
-      label: parsed.label || topic,
-      articles: parsed.articles,
-      apply:   tagRecSection(parsed.apply,   recs.apply),
-      review:  tagRecSection(parsed.review,  recs.review),
-      idea:    tagRecSection(parsed.idea,    recs.idea),
-      hoursPerWeek: parseInt(hours) || 5,
-      focusTopic: topic, interests,
+      category: "custom",
+      track: "science",
+      label: parsed.label || fb.label || topic,
+      articles,
+      apply: applyTagged.length ? applyTagged : fb.apply,
+      review: reviewTagged.length ? reviewTagged : fb.review,
+      idea: ideaTagged.length ? ideaTagged : fb.idea,
+      hoursPerWeek: parseInt(hours, 10) || 5,
+      focusTopic: topic,
+      interests,
     };
   }
   return {
     category: "custom", track: "technology",
     label: parsed.label || topic,
-    articles: parsed.articles,
+    articles: (parsed.articles || []).slice(0, 3),
     rep1:   tagRecSection(parsed.rep1,   recs.rep1),
     rep2:   tagRecSection(parsed.rep2,   recs.rep2),
     create: tagRecSection(parsed.create, recs.create),
@@ -434,7 +460,61 @@ const CREATE_TEMPLATES = {
 function detectCategory(topic){const t=topic.toLowerCase();for(const[cat,data]of Object.entries(TOPICS)){if(cat==="general")continue;if(data.keywords.some(k=>t.includes(k)))return cat;}return "general";}
 function detectInterests(str){const s=str.toLowerCase();const found=[];if(/art|design|visual|creat|draw|paint/.test(s))found.push("art");if(/music|sound|audio|song|beat|melody/.test(s))found.push("music");if(/game|gaming|video game|esport/.test(s))found.push("gaming");if(/sport|fitness|athlete|workout|exercise/.test(s))found.push("sports");if(/social|community|impact|volunteer|help/.test(s))found.push("social");if(/environment|nature|eco|animal|planet/.test(s))found.push("environment");if(/business|entrepreneur|startup|invest|market/.test(s))found.push("business");if(/writ|story|blog|journal|communicate/.test(s))found.push("writing");return found.length?found:["general"];}
 function getCreateProjects(interests,count=3){const pool=[],seen=new Set();for(const i of interests)pool.push(...(CREATE_TEMPLATES[i]||CREATE_TEMPLATES.general));pool.push(...CREATE_TEMPLATES.general);return pool.filter(p=>{if(seen.has(p.title))return false;seen.add(p.title);return true;}).slice(0,count);}
-function generateContent(focusTopic,hoursPerWeek,interests){const category=detectCategory(focusTopic);const data=TOPICS[category];const fix=s=>s.replace(/\[TOPIC\]/g,focusTopic);return{category,label:category==="general"?focusTopic:data.label,articles:data.articles.map(a=>({...a,title:fix(a.title),summary:fix(a.summary)})),rep1:data.rep1,rep2:data.rep2,create:getCreateProjects(detectInterests(interests)),hoursPerWeek:parseInt(hoursPerWeek),focusTopic,interests};}
+
+/** Offline / API-fallback science roadmap: TOPICS only store tech-style rep1/rep2; science needs apply, review, idea. */
+function buildScienceFallbackContent(focusTopic,hoursPerWeek,interests){
+  const category=detectCategory(focusTopic);
+  const data=TOPICS[category];
+  const label=category==="general"?focusTopic:data.label;
+  const fix=s=>String(s||"").replace(/\[TOPIC\]/g,focusTopic);
+  const hpw=parseInt(hoursPerWeek,10)||5;
+  const articles=data.articles.map(a=>({...a,title:fix(a.title),summary:fix(a.summary)})).slice(0,3);
+  const apply=[
+    {id:"ap1",title:`Test a core idea in ${label}`,emoji:"🔬",
+      description:`Pick one fundamental mechanism behind ${focusTopic} and test it with a safe home or classroom experiment, or a reputable free simulation. Document what you expected, what you observed, and what you would try next.`,
+      skills:["Experimental design","Observation","Scientific writing"],
+      tools:["Safe household or school materials","Notes or lab journal","Free simulation if useful"],
+      timeHours:Math.max(4,Math.round(hpw*1.2)),difficulty:1,tag:"recommended"},
+    {id:"ap2",title:`Compare two explanations of ${focusTopic}`,emoji:"⚖️",
+      description:`Find two different explanations (e.g. video + article) of the same concept. Note where they agree, where they disagree, and which is better supported. Summarize in a short written comparison.`,
+      skills:["Source evaluation","Critical reading","Synthesis"],
+      tools:["Web search","Google Scholar or library","Document or slides"],
+      timeHours:Math.max(5,Math.round(hpw*1.5)),difficulty:2},
+  ];
+  const review=[
+    {id:"rv1",title:`Literature mini-review on ${label}`,emoji:"📚",
+      description:`Choose a narrow question about ${focusTopic} that researchers still investigate. Find 6–10 accessible papers, read abstracts and conclusions, and write 800–1200 words on what the field agrees on, what is uncertain, and why it matters.`,
+      skills:["Literature search","Research synthesis","Academic writing","Critical thinking"],
+      tools:["Google Scholar","PubMed or ArXiv","Zotero (free)","Word or Google Docs"],
+      timeHours:Math.max(8,Math.round(hpw*2)),difficulty:2,tag:"recommended"},
+    {id:"rv2",title:`How ${label} is studied today`,emoji:"🧪",
+      description:`Survey common methods scientists use to study ${focusTopic}. Compare at least three approaches (lab, imaging, modeling, fieldwork, etc.). Explain which questions each method answers best and pitfalls beginners should avoid.`,
+      skills:["Method comparison","Technical reading","Science communication"],
+      tools:["Review articles","Educational videos","Notes"],
+      timeHours:Math.max(10,Math.round(hpw*2.2)),difficulty:2},
+  ];
+  const idea=[
+    {id:"id1",title:`A novel testable question in ${label}`,emoji:"💡",
+      description:`Propose one experiment or simulation that would fill a gap you see in ${focusTopic}. State a clear hypothesis, the smallest version of the study, what results would support or refute you, and who might care about the answer.`,
+      skills:["Hypothesis formation","Experimental design","Scientific communication"],
+      tools:["Reading notes","Simple spreadsheet modeling","Feedback from a teacher or mentor"],
+      timeHours:Math.max(12,Math.round(hpw*3)),difficulty:3,tag:"recommended"},
+    {id:"id2",title:`Ethics and impact in ${focusTopic}`,emoji:"🛡️",
+      description:`Outline who could be affected by research in ${focusTopic}, what could go wrong, and what safeguards matter. Tie to a real guideline or debate in the field. Finish with a one-page mini-proposal.`,
+      skills:["Ethics reasoning","Stakeholder thinking","Proposal writing"],
+      tools:["Age-appropriate ethics primers from journals or institutions","Word or Google Docs"],
+      timeHours:Math.max(14,Math.round(hpw*2.5)),difficulty:3},
+  ];
+  return{category,label,track:"science",articles,apply,review,idea,hoursPerWeek:hpw,focusTopic,interests};
+}
+
+function generateContent(focusTopic,hoursPerWeek,interests,track="technology"){
+  if(track==="science")return buildScienceFallbackContent(focusTopic,hoursPerWeek,interests);
+  const category=detectCategory(focusTopic);
+  const data=TOPICS[category];
+  const fix=s=>s.replace(/\[TOPIC\]/g,focusTopic);
+  return{category,label:category==="general"?focusTopic:data.label,articles:data.articles.map(a=>({...a,title:fix(a.title),summary:fix(a.summary)})).slice(0,3),rep1:data.rep1,rep2:data.rep2,create:getCreateProjects(detectInterests(interests)),hoursPerWeek:parseInt(hoursPerWeek,10)||5,focusTopic,interests};
+}
 function calcSchedule(totalHours,hpw){const weeks=Math.max(1,Math.ceil(totalHours/hpw));let h=totalHours,w=1;const schedule=[];while(h>0&&w<=weeks){const tw=Math.min(hpw,h);schedule.push({week:w,hours:tw});h-=tw;w++;}return{weeks,schedule,totalHours};}
 function rgbOf(hex){if(!hex||hex[0]!=='#')return "255,255,255";const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `${r},${g},${b}`;}
 function getGuide(type,project,hpw){
@@ -897,8 +977,17 @@ function MomentumBar({momentum, surging}) {
   const isEmpty = momentum <= 0;
   const pct = Math.max(0,Math.min(100,momentum));
   return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,height:8,
-      background:"rgba(255,255,255,0.025)",zIndex:300}}>
+    <div style={{
+      position:"fixed",
+      left:0,
+      right:0,
+      bottom:0,
+      height:8,
+      paddingBottom:"env(safe-area-inset-bottom, 0px)",
+      background:"rgba(255,255,255,0.025)",
+      zIndex:300,
+      boxSizing:"content-box",
+    }}>
       <div style={{
         height:"100%",
         width:`${pct}%`,
@@ -972,14 +1061,29 @@ const NAV_ITEMS = [
   {id:"guide",   label:"GUIDE",   Icon:GuideIcon},
 ];
 
-function Sidebar({open, onEnter, onLeave, screen, onNav, onReset}) {
+function Sidebar({open, onEnter, onLeave, screen, onNav, onReset, isMobile, onToggleOpen}) {
   const curIdx = SCREEN_ORDER.indexOf(screen);
   return (
-    <div className={open?"sb-open":""} onMouseEnter={onEnter} onMouseLeave={onLeave}
-      style={{position:"fixed",left:0,top:0,bottom:0,width:open?210:56,background:C.rail,
-        borderRight:`1px solid ${C.border}`,zIndex:200,
+    <div
+      className={open?"sb-open":""}
+      onMouseEnter={isMobile?undefined:onEnter}
+      onMouseLeave={isMobile?undefined:onLeave}
+      style={{
+        position:"fixed",
+        left:0,
+        top:0,
+        bottom:0,
+        width:open?210:56,
+        paddingTop:"calc(18px + env(safe-area-inset-top, 0px))",
+        paddingBottom:"calc(16px + env(safe-area-inset-bottom, 0px))",
+        background:C.rail,
+        borderRight:`1px solid ${C.border}`,
+        zIndex:200,
         transition:"width 0.15s cubic-bezier(0.4,0,0.2,1)",
-        display:"flex",flexDirection:"column",padding:"18px 0 16px",overflow:"hidden"}}>
+        display:"flex",
+        flexDirection:"column",
+        overflow:"hidden",
+      }}>
 
       {/* Logo */}
       <div style={{display:"flex",alignItems:"center",gap:12,
@@ -988,14 +1092,32 @@ function Sidebar({open, onEnter, onLeave, screen, onNav, onReset}) {
         <span className="sbl sbl-logo" style={{fontFamily:FM,fontSize:10,color:C.textDim,fontWeight:600,letterSpacing:"3px"}}>TKS</span>
       </div>
 
+      {isMobile&&(
+        <button
+          type="button"
+          aria-label={open?"Close menu":"Open menu"}
+          onClick={(e)=>{e.stopPropagation();onToggleOpen();}}
+          style={{
+            display:"flex",alignItems:"center",justifyContent:"center",
+            width:"100%",minHeight:44,marginBottom:8,
+            color:C.textMuted,fontFamily:FM,fontSize:18,letterSpacing:1,
+            borderRadius:6,marginLeft:4,marginRight:4,
+            border:`1px solid ${open?C.borderHov:"transparent"}`,
+            background:open?"rgba(255,255,255,0.06)":"transparent",
+            transition:"all 0.12s",
+          }}>
+          {open?"✕":"☰"}
+        </button>
+      )}
+
       {/* Nav items */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",gap:2,padding:"0 8px"}}>
+      <div className="sb-mobile-hit" style={{flex:1,display:"flex",flexDirection:"column",gap:2,padding:"0 8px"}}>
         {NAV_ITEMS.map(({id,label,Icon},i)=>{
           const isActive=screen===id;
           const isDone=i<curIdx;
           const locked=i>curIdx+1||(i===curIdx+1&&curIdx===-1);
           return (
-            <button key={id} onClick={()=>!locked&&onNav(id)}
+            <button key={id} data-nav type="button" onClick={()=>!locked&&onNav(id)}
               style={{display:"flex",alignItems:"center",gap:14,padding:"9px 11px",borderRadius:6,
                 background:isActive?"rgba(255,255,255,0.07)":"transparent",
                 border:isActive?`1px solid ${C.borderHov}`:"1px solid transparent",
@@ -1012,7 +1134,7 @@ function Sidebar({open, onEnter, onLeave, screen, onNav, onReset}) {
 
       {/* Reset */}
       <div style={{padding:"12px 8px 0",borderTop:`1px solid ${C.border}`}}>
-        <button onClick={onReset}
+        <button type="button" className="sb-reset-mobile" onClick={onReset}
           style={{display:"flex",alignItems:"center",gap:14,padding:"9px 11px",borderRadius:6,
             width:"100%",border:"1px solid transparent",color:C.textMuted,background:"transparent",
             transition:"all 0.12s",whiteSpace:"nowrap",overflow:"hidden"}}
@@ -1028,10 +1150,10 @@ function Sidebar({open, onEnter, onLeave, screen, onNav, onReset}) {
 
 // ── Ghost title ────────────────────────────────────────
 const GHOST_TITLES = {intro:"TKS FOCUS BUILDER",input:"CONFIGURE ROADMAP",results:"PROJECT ROADMAP",guide:"YOUR GUIDE"};
-function GhostTitle({screen}) {
+function GhostTitle({screen,isMobile}) {
   return (
     <div style={{fontFamily:FM,fontSize:11,color:"rgba(255,255,255,0.26)",
-      letterSpacing:"3px",marginBottom:44,userSelect:"none",animation:"fadeUp 0.4s ease-out"}}>
+      letterSpacing:"3px",marginBottom:isMobile?28:44,userSelect:"none",animation:"fadeUp 0.4s ease-out"}}>
       {GHOST_TITLES[screen]||"TKS"}
     </div>
   );
@@ -1227,11 +1349,17 @@ function InputScreen({onSubmit}) {
         <p style={{fontFamily:F,fontSize:14,color:C.textMuted,lineHeight:1.6,marginBottom:36}}>
           This shapes the type of projects and work you'll take on.
         </p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:"repeat(auto-fit, minmax(min(100%, 268px), 1fr))",
+          gap:14,
+          width:"100%",
+        }}>
           {opts.map(opt=>(
             <button key={opt.key} onClick={()=>setTrack(opt.key)}
               style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,
                 padding:"24px 22px",cursor:"pointer",textAlign:"left",
+                minWidth:0,width:"100%",
                 backdropFilter:"blur(12px)",transition:"all 0.15s",position:"relative",overflow:"hidden"}}
               onMouseEnter={e=>{
                 e.currentTarget.style.borderColor=opt.accent+"55";
@@ -1474,7 +1602,7 @@ function ResultsScreen({content,selections,onSelect,onSubmit,feedback,setFeedbac
   const {articles,rep1,rep2,create,apply,review,idea,label}=content;
   const track=content.track||"technology";
   const secs=getSecs(track);
-  const dataMap={article:articles,rep1,rep2,create,apply,review,idea};
+  const dataMap={article:(articles||[]).slice(0,3),rep1,rep2,create,apply,review,idea};
   const selectedCount=Object.values(selections).filter(v=>v!==null).length;
   const allSelected=selectedCount===secs.length;
 
@@ -1552,20 +1680,9 @@ function ResultsScreen({content,selections,onSelect,onSubmit,feedback,setFeedbac
 }
 
 // ══════════════════════════════════════════════════════
-//  PDF EXPORT — downloadable light-mode PDF via html2pdf.js
+//  GUIDE EXPORT — self-contained HTML file (open in browser; print to PDF if needed)
 // ══════════════════════════════════════════════════════
-async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLabel, hoursPerWeek) {
-  // Dynamically load html2pdf.js (bundles html2canvas + jsPDF) from CDN
-  if (!window.html2pdf) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      s.onload  = resolve;
-      s.onerror = () => reject(new Error("Could not load html2pdf.js"));
-      document.head.appendChild(s);
-    });
-  }
-
+function exportGuideHTML(project, guide, def, topSkills, diffLevel, diffLabel, hoursPerWeek) {
   const accent = def.accent;
   const esc = (v) => String(v||"")
     .replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -1707,58 +1824,32 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
       </div>
     </div>`;
 
+  const pageTitle = esc(project.title) + " — TKS Guide";
   const fullHtml =
-    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" +
+    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<title>" + pageTitle + "</title><style>" +
     css +
     "</style></head><body style=\"margin:0;background:#fff;color:#1a1a1a;\">" +
-    "<div id=\"pdf-wrap\" style=\"width:794px;padding:40px 48px;box-sizing:border-box;background:#fff;\">" +
+    "<div class=\"guide-wrap\" style=\"max-width:794px;margin:0 auto;padding:40px 48px;box-sizing:border-box;background:#fff;\">" +
     rootInner +
     "</div></body></html>";
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", "PDF export");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:820px;height:10000px;border:0;margin:0;padding:0;opacity:1;pointer-events:none;";
-  document.body.appendChild(iframe);
+  const filename =
+    "TKS_" +
+    project.title.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").slice(0, 50) +
+    "_Guide.html";
 
-  const idoc = iframe.contentDocument || iframe.contentWindow.document;
-  idoc.open();
-  idoc.write(fullHtml);
-  idoc.close();
-
-  const wrap = idoc.getElementById("pdf-wrap");
-  const target = wrap || idoc.body;
-  iframe.style.height = Math.min(Math.max(target.scrollHeight + 120, 600), 20000) + "px";
-  void target.offsetHeight;
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  await new Promise((r) => setTimeout(r, 200));
-
-  const filename = "TKS_" + project.title.replace(/[^a-zA-Z0-9\s]/g,"").replace(/\s+/g,"_").slice(0,50) + "_Guide.pdf";
-
-  try {
-    await window.html2pdf()
-      .set({
-        margin:      [10, 10, 10, 10],
-        filename,
-        image:       { type:"jpeg", quality:0.96 },
-        html2canvas: {
-          scale:2,
-          useCORS:true,
-          allowTaint:true,
-          backgroundColor:"#ffffff",
-          logging:false,
-          windowWidth:820,
-          scrollX:0,
-          scrollY:0,
-        },
-        jsPDF:       { unit:"mm", format:"a4", orientation:"portrait" },
-      })
-      .from(target)
-      .save();
-  } finally {
-    iframe.remove();
-  }
+  const blob = new Blob([fullHtml], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1921,7 +2012,7 @@ function GuideScreen({content, selections}) {
     <div style={{maxWidth:660,margin:"0 auto",padding:"0 0 80px",
       animation:entering?"fadeIn 0s":"slideInRight 0.28s ease-out",position:"relative",zIndex:1}}>
 
-      {/* Top action bar: Back + Export PDF */}
+      {/* Top action bar: Back + Export guide */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32}}>
         <button onClick={goBack}
           style={{display:"inline-flex",alignItems:"center",gap:8,
@@ -1934,10 +2025,10 @@ function GuideScreen({content, selections}) {
         </button>
         <button
           disabled={exporting}
-          onClick={async()=>{
+          onClick={()=>{
             setExporting(true);
-            try { await exportGuidePDF(project,guide,def,topSkills,diffLevel,diffLabel,hoursPerWeek); }
-            catch(e){ console.error("PDF export failed:",e); alert("PDF export failed: "+e.message); }
+            try { exportGuideHTML(project,guide,def,topSkills,diffLevel,diffLabel,hoursPerWeek); }
+            catch(e){ console.error("Guide export failed:",e); alert("Guide export failed: "+e.message); }
             finally { setExporting(false); }
           }}
           style={{display:"inline-flex",alignItems:"center",gap:7,
@@ -1956,7 +2047,7 @@ function GuideScreen({content, selections}) {
             e.currentTarget.style.background=`rgba(${rgbOf(def.accent)},0.07)`;
             e.currentTarget.style.borderColor=`${def.accent}44`;
           }}}>
-          {exporting ? "⏳ GENERATING…" : "↓ EXPORT PDF"}
+          {exporting ? "⏳ EXPORTING…" : "↓ EXPORT GUIDE"}
         </button>
       </div>
 
@@ -2116,6 +2207,13 @@ function GuideScreen({content, selections}) {
 export default function App() {
   useStyles();
 
+  const isMobile = useIsMobileLayout();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("mobile-layout", isMobile);
+    return () => document.documentElement.classList.remove("mobile-layout");
+  }, [isMobile]);
+
   const [screen,   setScreen]   = useState("intro");
   const [sbOpen,   setSbOpen]   = useState(false);
   const [content,  setContent]  = useState(null);
@@ -2167,7 +2265,7 @@ export default function App() {
       console.error("Claude API error:",err);
       setApiError(err.message||String(err));
       await new Promise(r=>setTimeout(r,2800));
-      const c={...generateContent(topic,hours,interests),track:selectedTrack};
+      const c={...generateContent(topic,hours,interests,selectedTrack),track:selectedTrack};
       setContent(c);
       setSel(emptySelections(selectedTrack));
       setFeedback("");
@@ -2205,7 +2303,7 @@ export default function App() {
       console.error("Claude API error:",err);
       setApiError(err.message||String(err));
       await new Promise(r=>setTimeout(r,2800));
-      const c={...generateContent(topic,hours,interests),track:t};
+      const c={...generateContent(topic,hours,interests,t),track:t};
       setContent(c);
       setSel(emptySelections(t));
       setFeedback("");
@@ -2214,22 +2312,48 @@ export default function App() {
     }
   };
 
-  const handleReset=()=>{
+  const handleNavScreen=useCallback((id)=>{
+    setScreen(id);
+    if(isMobile)setSbOpen(false);
+  },[isMobile]);
+
+  const handleReset=useCallback(()=>{
     setScreen("intro");setContent(null);
     setTrack("technology");
     setSel({article:null,rep1:null,rep2:null,create:null});
     setFeedback("");setMomentum(28);
-  };
+    if(isMobile)setSbOpen(false);
+  },[isMobile]);
+
+  const mainMarginLeft=isMobile?56:(sbOpen?210:56);
+  const mainPadding=isMobile
+    ? "max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))"
+    : "52px 48px 96px";
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex"}}>
       <GrainOverlay/>
+      {isMobile&&sbOpen&&(
+        <div
+          role="presentation"
+          aria-hidden
+          onClick={()=>setSbOpen(false)}
+          style={{
+            position:"fixed",
+            inset:0,
+            background:"rgba(0,0,0,0.48)",
+            zIndex:199,
+          }}
+        />
+      )}
       <Sidebar open={sbOpen} onEnter={()=>setSbOpen(true)} onLeave={()=>setSbOpen(false)}
-        screen={screen} onNav={setScreen} onReset={handleReset}/>
+        screen={screen} onNav={handleNavScreen} onReset={handleReset}
+        isMobile={isMobile} onToggleOpen={()=>setSbOpen(o=>!o)}/>
       <main style={{
-        marginLeft:sbOpen?210:56,
-        flex:1,minHeight:"100vh",
-        padding:"52px 48px 96px",
+        marginLeft:mainMarginLeft,
+        flex:1,
+        minHeight:isMobile?"100dvh":"100vh",
+        padding:mainPadding,
         transition:"margin-left 0.15s cubic-bezier(0.4,0,0.2,1), background 0.35s ease",
         position:"relative",zIndex:1,
         ...(screen==="intro" ? {
@@ -2239,7 +2363,7 @@ export default function App() {
           backgroundRepeat:"no-repeat",
         } : {}),
       }}>
-        <GhostTitle screen={screen}/>
+        <GhostTitle screen={screen} isMobile={isMobile}/>
         {screen==="intro"      && <IntroScreen onStart={handleStart}/>}
         {screen==="input"      && <InputScreen onSubmit={handleInput}/>}
         {screen==="generating" && <GeneratingScreen topic={genTopic} error={apiError}/>}

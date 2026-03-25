@@ -10,3 +10,37 @@ body,
   margin: 0;
   min-height: 100%;
 }
+
+/* Narrow viewports only — toggled via `html.mobile-layout` from App (matches JS breakpoint). */
+@media (max-width: 768px) {
+  html.mobile-layout {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.mobile-layout .sb-mobile-hit {
+    min-height: 44px;
+  }
+
+  html.mobile-layout .sb-mobile-hit button[data-nav] {
+    min-height: 44px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  html.mobile-layout .sb-reset-mobile {
+    min-height: 44px;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
