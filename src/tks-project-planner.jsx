@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import bgHomepage from "../background-1.jpg";
 
 // ══════════════════════════════════════════════════════
 //  TKS LOGO (embedded)
@@ -2146,8 +2147,15 @@ export default function App() {
         marginLeft:sbOpen?210:56,
         flex:1,minHeight:"100vh",
         padding:"52px 48px 96px",
-        transition:"margin-left 0.15s cubic-bezier(0.4,0,0.2,1)",
-        position:"relative",zIndex:1}}>
+        transition:"margin-left 0.15s cubic-bezier(0.4,0,0.2,1), background 0.35s ease",
+        position:"relative",zIndex:1,
+        ...(screen==="intro" ? {
+          backgroundImage:`linear-gradient(135deg, rgba(13,14,16,0.78) 0%, rgba(13,14,16,0.88) 45%, rgba(13,14,16,0.82) 100%), url(${bgHomepage})`,
+          backgroundSize:"cover",
+          backgroundPosition:"center",
+          backgroundRepeat:"no-repeat",
+        } : {}),
+      }}>
         <GhostTitle screen={screen}/>
         {screen==="intro"      && <IntroScreen onStart={handleStart}/>}
         {screen==="input"      && <InputScreen onSubmit={handleInput}/>}
