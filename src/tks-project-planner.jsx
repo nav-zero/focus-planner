@@ -1097,22 +1097,55 @@ function GeneratingScreen({topic, error}) {
 //  INTRO SCREEN
 // ══════════════════════════════════════════════════════
 function IntroScreen({onStart}) {
+  const scanOverlay = {
+    position:"absolute",
+    inset:0,
+    pointerEvents:"none",
+    borderRadius:4,
+    backgroundImage:`repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.14) 2px, rgba(0,0,0,0.14) 3px)`,
+    mixBlendMode:"multiply",
+  };
   return (
-    <div style={{maxWidth:540,margin:"0 auto",animation:"fadeUp 0.35s ease-out"}}>
-      <div style={{marginBottom:48}}>
-        <div style={{fontFamily:FM,fontSize:11,color:C.blue,letterSpacing:"3px",marginBottom:20,opacity:0.9}}>
-          MOMENTUM EDITION
-        </div>
-        <h1 style={{fontFamily:FM,fontSize:"clamp(26px,4vw,38px)",fontWeight:700,
-          color:C.text,lineHeight:1.15,marginBottom:18,letterSpacing:"-1px"}}>
-          Build your TKS<br/>
-          <span style={{color:"rgba(255,255,255,0.42)"}}>project roadmap.</span>
-        </h1>
-        <p style={{fontFamily:F,fontSize:16,color:C.textDim,lineHeight:1.7,maxWidth:440}}>
-          Tell us your focus topic and interests. Get a personalized set of articles,
-          replication projects, and original ideas — with step-by-step guides for each.
-        </p>
+    <div style={{maxWidth:560,margin:"0 auto",animation:"fadeUp 0.35s ease-out",textAlign:"center"}}>
+      <div style={{fontFamily:FM,fontSize:11,color:C.blue,letterSpacing:"3px",marginBottom:22,opacity:0.9}}>
+        MOMENTUM EDITION
       </div>
+
+      {/* Hero title — bold sans, dotted frame, CRT-style scan lines */}
+      <div style={{
+        display:"inline-block",
+        maxWidth:"100%",
+        padding:"clamp(28px,5vw,40px) clamp(36px,6vw,56px)",
+        marginBottom:32,
+        border:"2px dotted rgba(255,255,255,0.9)",
+        borderRadius:22,
+        background:"rgba(13,14,16,0.42)",
+        backdropFilter:"blur(10px)",
+        WebkitBackdropFilter:"blur(10px)",
+        boxShadow:`0 0 0 1px rgba(255,255,255,0.06), 0 0 72px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.06)`,
+      }}>
+        <div style={{position:"relative",display:"inline-block",textAlign:"center"}}>
+          <h1 style={{
+            fontFamily:`${F},'Helvetica Neue',Helvetica,Arial,sans-serif`,
+            fontSize:"clamp(28px,5.5vw,46px)",
+            fontWeight:800,
+            color:"#fff",
+            lineHeight:1.12,
+            margin:0,
+            letterSpacing:"-0.03em",
+            textShadow:"0 1px 0 rgba(0,0,0,0.35)",
+          }}>
+            Build your TKS<br/>
+            <span style={{color:"rgba(255,255,255,0.52)"}}>project roadmap.</span>
+          </h1>
+          <div aria-hidden style={scanOverlay}/>
+        </div>
+      </div>
+
+      <p style={{fontFamily:F,fontSize:16,color:C.textDim,lineHeight:1.7,maxWidth:440,margin:"0 auto 40px",textAlign:"center"}}>
+        Tell us your focus topic and interests. Get a personalized set of articles,
+        replication projects, and original ideas — with step-by-step guides for each.
+      </p>
 
       <Btn onClick={onStart} size="xl">INITIALIZE ROADMAP →</Btn>
     </div>
