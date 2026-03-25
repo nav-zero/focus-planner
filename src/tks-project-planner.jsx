@@ -1031,9 +1031,9 @@ function GeneratingScreen({topic, error}) {
           <h2 style={{fontFamily:FM,fontSize:22,color:C.text,marginBottom:16,letterSpacing:"-0.5px"}}>
             Could not reach Claude
           </h2>
-          <div style={{fontFamily:F,fontSize:13,color:C.textDim,lineHeight:1.7,
+          <div style={{fontFamily:FM,fontSize:11,color:C.textDim,lineHeight:1.7,
             background:C.surface,border:`1px solid ${C.rose}33`,borderRadius:8,
-            padding:"14px 18px",marginBottom:24,fontFamily:FM,fontSize:11}}>
+            padding:"14px 18px",marginBottom:24}}>
             {error}
           </div>
           <p style={{fontFamily:F,fontSize:13,color:C.textMuted,lineHeight:1.65}}>
