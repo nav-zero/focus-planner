@@ -30,15 +30,10 @@ const FM = "'Geist Mono','JetBrains Mono','Fira Code','Courier New',monospace";
 // ══════════════════════════════════════════════════════
 //  CLAUDE API
 // ══════════════════════════════════════════════════════
-// Vite inlines VITE_* at build time. Local: .env + restart dev server. Hosted: set VITE_ANTHROPIC_API_KEY on the host (e.g. Vercel) and redeploy.
+// Client key (Vite inlines at build). If empty, requests go to /api/claude (server ANTHROPIC_API_KEY on Vercel).
 const CLAUDE_API_KEY = String(import.meta.env.VITE_ANTHROPIC_API_KEY ?? "").trim();
 
 async function callClaudeAPI(topic, hours, interests, track="technology") {
-  if (!CLAUDE_API_KEY) {
-    throw new Error(
-      "No API key: set VITE_ANTHROPIC_API_KEY in a .env file (local) or in your host’s environment variables (e.g. Vercel → Settings → Environment Variables), then restart dev or redeploy."
-    );
-  }
 
   // ── Technology track prompt ────────────────────────────────────────────────
   const techPrompt = `You are a curriculum designer for TKS (The Knowledge Society), a deep tech accelerator for ambitious high-school students.
@@ -168,26 +163,51 @@ IDEA RULES:
 
   const prompt = track === "science" ? sciPrompt : techPrompt;
 
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": CLAUDE_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    }),
+  const apiBody = JSON.stringify({
+    model: "claude-haiku-4-5",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
   });
+
+  let resp;
+  if (CLAUDE_API_KEY) {
+    resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: apiBody,
+    });
+  } else {
+    resp = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: apiBody,
+    });
+  }
 
   if (!resp.ok) {
     const body = await resp.text();
+    if (resp.status === 404) {
+      throw new Error(
+        "No /api/claude route (are you on Vercel?). For local `npm run dev`, set VITE_ANTHROPIC_API_KEY in .env or run `vercel dev`."
+      );
+    }
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      /* not JSON */
+    }
+    if (parsed && typeof parsed.error === "string") {
+      throw new Error(parsed.error);
+    }
     if (resp.status === 401) {
       throw new Error(
-        "Anthropic returned 401 (invalid API key or unauthorized). Check VITE_ANTHROPIC_API_KEY and that the key is active."
+        "Anthropic returned 401 (invalid or missing API key). For production set ANTHROPIC_API_KEY on the server, or VITE_ANTHROPIC_API_KEY for browser calls."
       );
     }
     throw new Error(`API ${resp.status}: ${body.slice(0, 500)}`);
@@ -1052,8 +1072,9 @@ function GeneratingScreen({topic, error}) {
             {error}
           </div>
           <p style={{fontFamily:F,fontSize:13,color:C.textMuted,lineHeight:1.65}}>
-            Set <code style={{color:C.blue}}>VITE_ANTHROPIC_API_KEY</code> in <code style={{color:C.blue}}>.env</code> locally (restart <code style={{color:C.blue}}>npm run dev</code>)
-            or in your host’s env (e.g. Vercel → Environment Variables) and redeploy. Falling back to local content…
+            Production: set <code style={{color:C.blue}}>ANTHROPIC_API_KEY</code> on the server (Vercel → Environment Variables) and redeploy — or use{" "}
+            <code style={{color:C.blue}}>VITE_ANTHROPIC_API_KEY</code> for browser calls. Local: <code style={{color:C.blue}}>.env</code> + restart{" "}
+            <code style={{color:C.blue}}>npm run dev</code>. Falling back to local content…
           </p>
         </div>
       ) : (
@@ -1654,11 +1675,17 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
     .ft{margin-top:28px;padding-top:12px;border-top:1px solid #e5e5e5;font-size:10px;color:#bbb;display:flex;justify-content:space-between;font-family:monospace;}
   `;
 
-  // ── Assemble DOM element ────────────────────────────
+  // ── Assemble DOM (styles in <head>: off-screen roots often render blank in html2canvas)
+  const styleEl = document.createElement("style");
+  styleEl.id = "pdf-export-styles";
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+
   const wrap = document.createElement("div");
-  wrap.style.cssText = "position:absolute;left:-99999px;top:0;width:730px;background:#fff;padding:40px 48px;";
+  wrap.id = "pdf-export-root";
+  wrap.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:794px;max-width:100vw;background:#fff;padding:40px 48px;z-index:-1;opacity:0.02;pointer-events:none;";
   wrap.innerHTML = `
-    <style>${css}</style>
     <div class="root">
       <div class="hdr">
         <span class="tks">TKS</span>
@@ -1691,6 +1718,8 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
     </div>`;
 
   document.body.appendChild(wrap);
+  void wrap.offsetHeight;
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   const filename = "TKS_" + project.title.replace(/[^a-zA-Z0-9\s]/g,"").replace(/\s+/g,"_").slice(0,50) + "_Guide.pdf";
 
@@ -1700,7 +1729,26 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
         margin:      [10, 10, 10, 10],
         filename,
         image:       { type:"jpeg", quality:0.96 },
-        html2canvas: { scale:2, useCORS:true, backgroundColor:"#ffffff", logging:false },
+        html2canvas: {
+          scale:2,
+          useCORS:true,
+          allowTaint:true,
+          backgroundColor:"#ffffff",
+          logging:false,
+          onclone(clonedDoc) {
+            if (!clonedDoc.getElementById("pdf-export-styles-clone")) {
+              const st = clonedDoc.createElement("style");
+              st.id = "pdf-export-styles-clone";
+              st.textContent = css;
+              clonedDoc.head.appendChild(st);
+            }
+            const node = clonedDoc.getElementById("pdf-export-root");
+            if (node) {
+              node.style.cssText =
+                "position:relative;left:0;top:0;width:794px;background:#fff;padding:40px 48px;opacity:1;z-index:1;pointer-events:none;overflow:visible;";
+            }
+          },
+        },
         jsPDF:       { unit:"mm", format:"a4", orientation:"portrait" },
         pagebreak:   { mode:"avoid-all" },
       })
@@ -1708,6 +1756,7 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
       .save();
   } finally {
     document.body.removeChild(wrap);
+    styleEl.remove();
   }
 }
 
