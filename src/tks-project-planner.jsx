@@ -29,9 +29,15 @@ const FM = "'Geist Mono','JetBrains Mono','Fira Code','Courier New',monospace";
 // ══════════════════════════════════════════════════════
 //  CLAUDE API
 // ══════════════════════════════════════════════════════
-const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
+// Vite inlines VITE_* at build time. Local: .env + restart dev server. Hosted: set VITE_ANTHROPIC_API_KEY on the host (e.g. Vercel) and redeploy.
+const CLAUDE_API_KEY = String(import.meta.env.VITE_ANTHROPIC_API_KEY ?? "").trim();
 
 async function callClaudeAPI(topic, hours, interests, track="technology") {
+  if (!CLAUDE_API_KEY) {
+    throw new Error(
+      "No API key: set VITE_ANTHROPIC_API_KEY in a .env file (local) or in your host’s environment variables (e.g. Vercel → Settings → Environment Variables), then restart dev or redeploy."
+    );
+  }
 
   // ── Technology track prompt ────────────────────────────────────────────────
   const techPrompt = `You are a curriculum designer for TKS (The Knowledge Society), a deep tech accelerator for ambitious high-school students.
@@ -176,7 +182,15 @@ IDEA RULES:
     }),
   });
 
-  if (!resp.ok) throw new Error(`API ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) {
+    const body = await resp.text();
+    if (resp.status === 401) {
+      throw new Error(
+        "Anthropic returned 401 (invalid API key or unauthorized). Check VITE_ANTHROPIC_API_KEY and that the key is active."
+      );
+    }
+    throw new Error(`API ${resp.status}: ${body.slice(0, 500)}`);
+  }
   const data = await resp.json();
   const text = data.content[0].text.trim();
   const clean = text.replace(/^```(?:json)?\n?/,"").replace(/\n?```$/,"");
@@ -1037,8 +1051,8 @@ function GeneratingScreen({topic, error}) {
             {error}
           </div>
           <p style={{fontFamily:F,fontSize:13,color:C.textMuted,lineHeight:1.65}}>
-            Check that your API key is set correctly in the file (<code style={{color:C.blue}}>CLAUDE_API_KEY</code>)
-            and that you have an active Anthropic account. Falling back to local content…
+            Set <code style={{color:C.blue}}>VITE_ANTHROPIC_API_KEY</code> in <code style={{color:C.blue}}>.env</code> locally (restart <code style={{color:C.blue}}>npm run dev</code>)
+            or in your host’s env (e.g. Vercel → Environment Variables) and redeploy. Falling back to local content…
           </p>
         </div>
       ) : (
@@ -1082,7 +1096,6 @@ function GeneratingScreen({topic, error}) {
 //  INTRO SCREEN
 // ══════════════════════════════════════════════════════
 function IntroScreen({onStart}) {
-  const stats=[{label:"ARTICLES",val:"3"},{label:"REP I",val:"2"},{label:"REP II",val:"2"},{label:"CREATE",val:"3"}];
   return (
     <div style={{maxWidth:540,margin:"0 auto",animation:"fadeUp 0.35s ease-out"}}>
       <div style={{marginBottom:48}}>
@@ -1097,32 +1110,6 @@ function IntroScreen({onStart}) {
         <p style={{fontFamily:F,fontSize:16,color:C.textDim,lineHeight:1.7,maxWidth:440}}>
           Tell us your focus topic and interests. Get a personalized set of articles,
           replication projects, and original ideas — with step-by-step guides for each.
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div style={{display:"flex",gap:1,marginBottom:44,
-        border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",
-        backdropFilter:"blur(10px)"}}>
-        {stats.map(({label,val},i)=>(
-          <div key={i} style={{flex:1,padding:"16px 12px",
-            background:i%2===0?C.surface:"rgba(255,255,255,0.02)",
-            textAlign:"center",borderRight:i<stats.length-1?`1px solid ${C.border}`:"none"}}>
-            <div style={{fontFamily:FM,fontSize:22,color:C.text,fontWeight:700,marginBottom:5}}>{val}</div>
-            <div style={{fontFamily:FM,fontSize:9,color:C.textMuted,letterSpacing:"1.5px"}}>{label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Momentum hint */}
-      <div style={{display:"flex",alignItems:"flex-start",gap:14,padding:"14px 18px",
-        background:C.surface,border:`1px solid rgba(96,165,250,0.14)`,borderRadius:8,
-        marginBottom:36,backdropFilter:"blur(10px)"}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:C.text,flexShrink:0,marginTop:4,
-          boxShadow:`0 0 10px rgba(96,165,250,0.55), 0 0 4px rgba(255,255,255,0.7)`}}/>
-        <p style={{fontFamily:F,fontSize:13,color:C.textDim,lineHeight:1.65,margin:0}}>
-          Your <span style={{color:C.text,fontFamily:FM,fontSize:11}}>MOMENTUM</span> bar tracks your energy.
-          It surges when you make choices and drains when you go idle. Keep the streak alive.
         </p>
       </div>
 
@@ -1154,13 +1141,22 @@ function InputScreen({onSubmit}) {
     }
   },[stepIdx,track]);
 
+  // Auto-height multiline field so the underline hugs the text (not a fixed rows={4} gap).
+  useEffect(()=>{
+    if(!track)return;
+    const el=inputRef.current;
+    if(!el||el.nodeName!=="TEXTAREA")return;
+    el.style.height="auto";
+    el.style.height=`${el.scrollHeight}px`;
+  },[track,stepIdx,values,exiting]);
+
   // ── Track picker (shown before wizard steps) ──────────────────────────────
   if(!track){
     const opts=[
-      {key:"technology",label:"Technology",emoji:"💻",
+      {key:"technology",label:"Technology",icon:"chip",
        desc:"Build software projects, apps, and tools. You'll get articles to write, two replication projects to build, and a creative original idea.",
        accent:C.blue},
-      {key:"science",label:"Science",emoji:"🔬",
+      {key:"science",label:"Science",icon:"flask",
        desc:"Explore scientific topics deeply. You'll get articles to write, a hands-on experiment, a literature review, and an original research idea.",
        accent:C.green},
     ];
@@ -1168,7 +1164,7 @@ function InputScreen({onSubmit}) {
       <div style={{maxWidth:560,margin:"0 auto",animation:"fadeUp 0.3s ease-out"}}>
         <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28}}>
           <div style={{fontFamily:FM,fontSize:11,color:C.textMuted,letterSpacing:"2px"}}>
-            00&nbsp;/&nbsp;{String(WIZARD_STEPS.length+1).padStart(2,"0")}
+            1&nbsp;/&nbsp;{WIZARD_STEPS.length + 1}
           </div>
           <div style={{flex:1,height:1,background:`linear-gradient(to right,${C.border},transparent)`}}/>
         </div>
@@ -1199,7 +1195,9 @@ function InputScreen({onSubmit}) {
               }}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:2,
                 background:opt.accent,opacity:0.6,borderRadius:"12px 12px 0 0"}}/>
-              <div style={{fontFamily:FM,fontSize:28,marginBottom:16}}>{opt.emoji}</div>
+              <div style={{marginBottom:16,lineHeight:0,display:"flex",alignItems:"center"}}>
+                {ICONS[opt.icon](opt.accent, 36)}
+              </div>
               <div style={{fontFamily:FM,fontSize:15,fontWeight:700,color:C.text,
                 marginBottom:10,letterSpacing:"-0.3px"}}>{opt.label}</div>
               <div style={{fontFamily:F,fontSize:12,color:C.textMuted,lineHeight:1.65}}>
@@ -1213,6 +1211,12 @@ function InputScreen({onSubmit}) {
   }
 
   const step=WIZARD_STEPS[stepIdx];
+  const fieldPlaceholder=
+    step.id==="topic"
+      ? (track==="science"
+          ? "eg. Biotech, Nuclear Fusion, Cellular Agriculture..."
+          : "eg. AI, Blockchain, Quantum Computer, BCIs...")
+      : step.placeholder;
   const val=values[step.id]||"";
   const isLast=stepIdx===WIZARD_STEPS.length-1;
   const canAdvance=val.trim().length>0&&(step.type!=="number"||!isNaN(parseInt(val)));
@@ -1251,7 +1255,7 @@ function InputScreen({onSubmit}) {
         {/* Counter */}
         <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28}}>
           <div style={{fontFamily:FM,fontSize:11,color:C.textMuted,letterSpacing:"2px"}}>
-            {String(stepIdx+1).padStart(2,"0")}&nbsp;/&nbsp;{String(WIZARD_STEPS.length).padStart(2,"0")}
+            {stepIdx + 2}&nbsp;/&nbsp;{WIZARD_STEPS.length + 1}
           </div>
           <div style={{flex:1,height:1,background:`linear-gradient(to right,${C.border},transparent)`}}/>
         </div>
@@ -1270,13 +1274,14 @@ function InputScreen({onSubmit}) {
           {step.multiline
             ? <textarea ref={inputRef} value={val}
                 onChange={e=>setValues(v=>({...v,[step.id]:e.target.value}))}
-                onKeyDown={handleKey} placeholder={step.placeholder} rows={4}
+                onKeyDown={handleKey} placeholder={fieldPlaceholder} rows={1}
                 style={{width:"100%",fontFamily:F,fontSize:17,color:C.text,lineHeight:1.6,
                   background:"transparent",border:"none",borderBottom:`1.5px solid ${val?C.text:C.border}`,
-                  padding:"4px 0 12px",transition:"border-color 0.2s",resize:"none"}}/>
+                  padding:"4px 0 8px",transition:"border-color 0.2s",resize:"none",
+                  overflow:"hidden",minHeight:0,boxSizing:"border-box"}}/>
             : <input ref={inputRef} type={step.type||"text"} value={val}
                 onChange={e=>setValues(v=>({...v,[step.id]:e.target.value}))}
-                onKeyDown={handleKey} placeholder={step.placeholder}
+                onKeyDown={handleKey} placeholder={fieldPlaceholder}
                 style={{width:"100%",fontFamily:F,fontSize:22,color:C.text,lineHeight:1.4,
                   background:"transparent",border:"none",borderBottom:`1.5px solid ${val?C.text:C.border}`,
                   padding:"4px 0 12px",transition:"border-color 0.2s"}}/>
