@@ -263,6 +263,7 @@ function useStyles() {
     [
       {id:"gf-jakarta",href:"https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap"},
       {id:"gf-geist",  href:"https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&display=swap"},
+      {id:"gf-garamond",href:"https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap"},
     ].forEach(({id,href})=>{
       if(!document.getElementById(id)){
         const l=document.createElement("link");l.id=id;l.rel="stylesheet";l.href=href;
@@ -1132,7 +1133,7 @@ function IntroScreen({onStart}) {
         MOMENTUM EDITION
       </div>
 
-      {/* Hero title — bold sans, dotted frame, CRT-style scan lines */}
+      {/* Hero title — EB Garamond serif, dotted frame, CRT-style scan lines */}
       <div style={{
         display:"inline-block",
         maxWidth:"100%",
@@ -1147,13 +1148,13 @@ function IntroScreen({onStart}) {
       }}>
         <div style={{position:"relative",display:"inline-block",textAlign:"center"}}>
           <h1 style={{
-            fontFamily:`${F},'Helvetica Neue',Helvetica,Arial,sans-serif`,
+            fontFamily:'"EB Garamond","Iowan Old Style","Georgia",serif',
             fontSize:"clamp(28px,5.5vw,46px)",
-            fontWeight:800,
+            fontWeight:700,
             color:"#fff",
             lineHeight:1.12,
             margin:0,
-            letterSpacing:"-0.03em",
+            letterSpacing:"-0.02em",
             textShadow:"0 1px 0 rgba(0,0,0,0.35)",
           }}>
             Build your TKS<br/>
