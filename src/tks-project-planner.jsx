@@ -1080,10 +1080,6 @@ function GeneratingScreen({topic, error}) {
         </div>
       ) : (
         <div>
-          <div style={{fontFamily:FM,fontSize:11,color:C.blue,letterSpacing:"3px",marginBottom:32,opacity:0.9}}>
-            CLAUDE IS THINKING
-          </div>
-
           {/* Animated orb */}
           <div style={{width:64,height:64,borderRadius:"50%",marginBottom:36,
             background:"radial-gradient(circle at 35% 35%, rgba(96,165,250,0.35), rgba(96,165,250,0.04))",
@@ -1158,7 +1154,7 @@ function IntroScreen({onStart}) {
             textShadow:"0 1px 0 rgba(0,0,0,0.35)",
           }}>
             Build your TKS<br/>
-            <span style={{color:"rgba(255,255,255,0.52)"}}>project roadmap.</span>
+            <span style={{color:"rgba(255,255,255,0.52)"}}>focus roadmap.</span>
           </h1>
           <div aria-hidden style={scanOverlay}/>
         </div>
@@ -1583,8 +1579,11 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
   const diffDots   = [1,2,3].map(d =>
     `<span class="dd ${d<=diffLevel?"dd-on":"dd-off"}"></span>`).join("");
 
-  const stepsHtml = (guide?.steps||[]).map((step, i) => {
-    const last = i === (guide.steps.length - 1);
+  const steps = guide?.steps || [];
+  const stepsHtml = steps.length === 0
+    ? `<p class="sd" style="margin-top:4px;">No guide steps are available for this project type.</p>`
+    : steps.map((step, i) => {
+    const last = i === (steps.length - 1);
     const queries = (step.claude||step.youtube) ? `
       <div class="sq">
         ${step.claude  ? `<div class="q qc"><div class="ql">ASK CLAUDE</div><div class="qt">${esc(step.claude)}</div></div>`  : ""}
@@ -1650,7 +1649,7 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
     .slbl{font-size:9px;font-weight:700;letter-spacing:2px;color:#999;margin-bottom:14px;text-transform:uppercase;font-family:monospace;}
     .step{display:flex;gap:13px;}
     .sl{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
-    .sn{width:26px;height:26px;border-radius:5px;background:${accent}15;border:1px solid ${accent}2e;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${accent};font-family:monospace;}
+    .sn{width:26px;height:26px;border-radius:5px;background:${accent}15;border:1px solid ${accent}2e;text-align:center;line-height:26px;font-size:10px;font-weight:700;color:${accent};font-family:monospace;}
     .sc{flex:1;width:1px;margin-top:4px;min-height:18px;background:repeating-linear-gradient(to bottom,#ccc 0,#ccc 4px,transparent 4px,transparent 8px);}
     .sb{flex:1;padding-top:2px;padding-bottom:18px;}
     .sb-last{padding-bottom:0;}
@@ -1676,17 +1675,7 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
     .ft{margin-top:28px;padding-top:12px;border-top:1px solid #e5e5e5;font-size:10px;color:#bbb;display:flex;justify-content:space-between;font-family:monospace;}
   `;
 
-  // ── Assemble DOM (styles in <head>: off-screen roots often render blank in html2canvas)
-  const styleEl = document.createElement("style");
-  styleEl.id = "pdf-export-styles";
-  styleEl.textContent = css;
-  document.head.appendChild(styleEl);
-
-  const wrap = document.createElement("div");
-  wrap.id = "pdf-export-root";
-  wrap.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:794px;max-width:100vw;background:#fff;padding:40px 48px;z-index:-1;opacity:0.02;pointer-events:none;";
-  wrap.innerHTML = `
+  const rootInner = `
     <div class="root">
       <div class="hdr">
         <span class="tks">TKS</span>
@@ -1718,9 +1707,32 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
       </div>
     </div>`;
 
-  document.body.appendChild(wrap);
-  void wrap.offsetHeight;
+  const fullHtml =
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>" +
+    css +
+    "</style></head><body style=\"margin:0;background:#fff;color:#1a1a1a;\">" +
+    "<div id=\"pdf-wrap\" style=\"width:794px;padding:40px 48px;box-sizing:border-box;background:#fff;\">" +
+    rootInner +
+    "</div></body></html>";
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "PDF export");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:820px;height:10000px;border:0;margin:0;padding:0;opacity:1;pointer-events:none;";
+  document.body.appendChild(iframe);
+
+  const idoc = iframe.contentDocument || iframe.contentWindow.document;
+  idoc.open();
+  idoc.write(fullHtml);
+  idoc.close();
+
+  const wrap = idoc.getElementById("pdf-wrap");
+  const target = wrap || idoc.body;
+  iframe.style.height = Math.min(Math.max(target.scrollHeight + 120, 600), 20000) + "px";
+  void target.offsetHeight;
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await new Promise((r) => setTimeout(r, 200));
 
   const filename = "TKS_" + project.title.replace(/[^a-zA-Z0-9\s]/g,"").replace(/\s+/g,"_").slice(0,50) + "_Guide.pdf";
 
@@ -1736,28 +1748,16 @@ async function exportGuidePDF(project, guide, def, topSkills, diffLevel, diffLab
           allowTaint:true,
           backgroundColor:"#ffffff",
           logging:false,
-          onclone(clonedDoc) {
-            if (!clonedDoc.getElementById("pdf-export-styles-clone")) {
-              const st = clonedDoc.createElement("style");
-              st.id = "pdf-export-styles-clone";
-              st.textContent = css;
-              clonedDoc.head.appendChild(st);
-            }
-            const node = clonedDoc.getElementById("pdf-export-root");
-            if (node) {
-              node.style.cssText =
-                "position:relative;left:0;top:0;width:794px;background:#fff;padding:40px 48px;opacity:1;z-index:1;pointer-events:none;overflow:visible;";
-            }
-          },
+          windowWidth:820,
+          scrollX:0,
+          scrollY:0,
         },
         jsPDF:       { unit:"mm", format:"a4", orientation:"portrait" },
-        pagebreak:   { mode:"avoid-all" },
       })
-      .from(wrap)
+      .from(target)
       .save();
   } finally {
-    document.body.removeChild(wrap);
-    styleEl.remove();
+    iframe.remove();
   }
 }
 
