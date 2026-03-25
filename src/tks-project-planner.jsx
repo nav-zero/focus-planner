@@ -24,8 +24,9 @@ const C = {
   rose:       "#fb7185",
   blue:       "#60a5fa",
 };
-const F  = "'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif";
-const FM = "'Geist Mono','JetBrains Mono','Fira Code','Courier New',monospace";
+const F  = "'Inter',system-ui,sans-serif";
+const FM = "'Inter',system-ui,sans-serif";
+const F_HERO = "'Plus Jakarta Sans','Helvetica Neue',Helvetica,Arial,sans-serif";
 
 // ══════════════════════════════════════════════════════
 //  CLAUDE API
@@ -261,9 +262,8 @@ const TKS_LOGO = "data:image/jpeg;base64,/9j/4QBORXhpZgAATU0AKgAAAAgAAwEaAAUAAAA
 function useStyles() {
   useEffect(() => {
     [
+      {id:"gf-inter",   href:"https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..900;1,14..32,400..900&display=swap"},
       {id:"gf-jakarta",href:"https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap"},
-      {id:"gf-geist",  href:"https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&display=swap"},
-      {id:"gf-garamond",href:"https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap"},
     ].forEach(({id,href})=>{
       if(!document.getElementById(id)){
         const l=document.createElement("link");l.id=id;l.rel="stylesheet";l.href=href;
@@ -1133,7 +1133,7 @@ function IntroScreen({onStart}) {
         MOMENTUM EDITION
       </div>
 
-      {/* Hero title — EB Garamond serif, dotted frame, CRT-style scan lines */}
+      {/* Hero title — bold sans, dotted frame, CRT-style scan lines */}
       <div style={{
         display:"inline-block",
         maxWidth:"100%",
@@ -1148,13 +1148,13 @@ function IntroScreen({onStart}) {
       }}>
         <div style={{position:"relative",display:"inline-block",textAlign:"center"}}>
           <h1 style={{
-            fontFamily:'"EB Garamond","Iowan Old Style","Georgia",serif',
-            fontSize:"clamp(28px,5.5vw,46px)",
-            fontWeight:700,
+            fontFamily:F_HERO,
+            fontSize:"clamp(36px, 7vw, 58px)",
+            fontWeight:800,
             color:"#fff",
             lineHeight:1.12,
             margin:0,
-            letterSpacing:"-0.02em",
+            letterSpacing:"-0.05em",
             textShadow:"0 1px 0 rgba(0,0,0,0.35)",
           }}>
             Build your TKS<br/>
@@ -2233,7 +2233,7 @@ export default function App() {
         transition:"margin-left 0.15s cubic-bezier(0.4,0,0.2,1), background 0.35s ease",
         position:"relative",zIndex:1,
         ...(screen==="intro" ? {
-          backgroundImage:`linear-gradient(135deg, rgba(13,14,16,0.78) 0%, rgba(13,14,16,0.88) 45%, rgba(13,14,16,0.82) 100%), url(${bgHomepage})`,
+          backgroundImage:`linear-gradient(135deg, rgba(13,14,16,0.42) 0%, rgba(13,14,16,0.55) 45%, rgba(13,14,16,0.48) 100%), url(${bgHomepage})`,
           backgroundSize:"cover",
           backgroundPosition:"center",
           backgroundRepeat:"no-repeat",
